@@ -19,9 +19,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const previewTabBtn = document.getElementById("previewTabBtn");
   const editTabBtn = document.getElementById("editTabBtn");
   const fillSampleBtn = document.getElementById("fillSampleBtn");
+  const saveFactsBtn = document.getElementById("saveFactsBtn");
+  const loadFactsBtn = document.getElementById("loadFactsBtn");
+  const factsFeedback = document.getElementById("factsFeedback");
   const copyBtn = document.getElementById("copyBtn");
   const downloadBtn = document.getElementById("downloadBtn");
   const copyFeedback = document.getElementById("copyFeedback");
+  const FACTS_STORAGE_KEY = "docDraftFactCard";
 
   function escapeHtml(text) {
     return text
@@ -204,6 +208,52 @@ document.addEventListener("DOMContentLoaded", () => {
     factContact.value = "학생지원팀 장학 담당자 (02-1234-5678)";
   });
 
+  function getFactsData() {
+    return {
+      date_time: factDateTime.value.trim(),
+      location: factLocation.value.trim(),
+      target: factTarget.value.trim(),
+      how_to_apply: factHowToApply.value.trim(),
+      contact: factContact.value.trim(),
+    };
+  }
+
+  function saveFactsToStorage() {
+    try {
+      localStorage.setItem(FACTS_STORAGE_KEY, JSON.stringify(getFactsData()));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  saveFactsBtn.addEventListener("click", () => {
+    if (saveFactsToStorage()) {
+      factsFeedback.textContent = "사실 카드가 브라우저에 저장되었습니다.";
+    } else {
+      factsFeedback.textContent = "브라우저 저장소에 접근할 수 없습니다.";
+    }
+  });
+
+  loadFactsBtn.addEventListener("click", () => {
+    try {
+      const saved = localStorage.getItem(FACTS_STORAGE_KEY);
+      if (!saved) {
+        factsFeedback.textContent = "저장된 사실 카드가 아직 없습니다.";
+        return;
+      }
+      const facts = JSON.parse(saved);
+      factDateTime.value = facts.date_time || "";
+      factLocation.value = facts.location || "";
+      factTarget.value = facts.target || "";
+      factHowToApply.value = facts.how_to_apply || "";
+      factContact.value = facts.contact || "";
+      factsFeedback.textContent = "저장된 사실 카드를 불러왔습니다.";
+    } catch (error) {
+      factsFeedback.textContent = "저장된 사실 카드를 불러오지 못했습니다.";
+    }
+  });
+
   function showError(message) {
     errorMessage.textContent = message;
     errorMessage.hidden = false;
@@ -244,19 +294,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectedPrompt = document.querySelector('input[name="prompt_type"]:checked');
     const promptType = selectedPrompt ? selectedPrompt.value : "A";
 
+    const factsData = getFactsData();
+    saveFactsToStorage();
+
     const payload = {
       doc_type: docType,
       title: title,
       recipient: recipientInput.value.trim(),
       tone: toneInput.value,
       prompt_type: promptType,
-      facts: {
-        date_time: factDateTime.value.trim(),
-        location: factLocation.value.trim(),
-        target: factTarget.value.trim(),
-        how_to_apply: factHowToApply.value.trim(),
-        contact: factContact.value.trim(),
-      },
+      facts: factsData,
     };
 
     setLoading(true);
