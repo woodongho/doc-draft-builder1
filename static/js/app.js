@@ -25,7 +25,173 @@ document.addEventListener("DOMContentLoaded", () => {
   const copyBtn = document.getElementById("copyBtn");
   const downloadBtn = document.getElementById("downloadBtn");
   const copyFeedback = document.getElementById("copyFeedback");
+  const authGate = document.getElementById("authGate");
+  const authForm = document.getElementById("authForm");
+  const appPasswordInput = document.getElementById("appPasswordInput");
+  const authError = document.getElementById("authError");
+  const authSubmitBtn = document.getElementById("authSubmitBtn");
+  const appContent = document.getElementById("appContent");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const pwaInstallBanner = document.getElementById("pwaInstallBanner");
+  const pwaPopupDesc = document.getElementById("pwaPopupDesc");
+  const pwaIosGuide = document.getElementById("pwaIosGuide");
+  const pwaLaterBtn = document.getElementById("pwaLaterBtn");
+  const pwaInstallBtn = document.getElementById("pwaInstallBtn");
   const FACTS_STORAGE_KEY = "docDraftFactCard";
+  const PWA_DISMISS_KEY = "pwaInstallDismissedAt";
+  const PWA_DISMISS_DAYS = 7;
+  let deferredInstallPrompt = null;
+
+  function setAuthenticatedState(authenticated) {
+    authGate.hidden = authenticated;
+    appContent.hidden = !authenticated;
+    logoutBtn.hidden = !authenticated;
+    if (!authenticated) {
+      appPasswordInput.value = "";
+      appPasswordInput.focus();
+    }
+  }
+
+  function showAuthError(message) {
+    authError.textContent = message;
+    authError.hidden = false;
+  }
+
+  function clearAuthError() {
+    authError.textContent = "";
+    authError.hidden = true;
+  }
+
+  authForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearAuthError();
+
+    const password = appPasswordInput.value.trim();
+    if (password.length < 8) {
+      showAuthError("비밀번호는 8자리 이상 입력해 주세요.");
+      appPasswordInput.focus();
+      return;
+    }
+
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = "확인 중...";
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        showAuthError(data.error || "비밀번호 확인에 실패했습니다.");
+        appPasswordInput.focus();
+        return;
+      }
+
+      setAuthenticatedState(true);
+    } catch (error) {
+      showAuthError("서버와 통신할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      authSubmitBtn.disabled = false;
+      authSubmitBtn.textContent = "잠금 해제";
+    }
+  });
+
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (error) {
+      // 네트워크 오류 시에도 화면 잠금 상태로 전환합니다.
+    }
+    setAuthenticatedState(false);
+  });
+
+  function isStandaloneMode() {
+    return (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true
+    );
+  }
+
+  function wasInstallDismissedRecently() {
+    try {
+      const raw = localStorage.getItem(PWA_DISMISS_KEY);
+      if (!raw) return false;
+      const elapsedMs = Date.now() - Number(raw);
+      return elapsedMs < PWA_DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function dismissInstallPopup() {
+    pwaInstallBanner.hidden = true;
+    try {
+      localStorage.setItem(PWA_DISMISS_KEY, String(Date.now()));
+    } catch (error) {
+      // localStorage 사용 불가 시 무시합니다.
+    }
+  }
+
+  function isIosSafari() {
+    const ua = window.navigator.userAgent;
+    const isIos = /iphone|ipad|ipod/i.test(ua);
+    const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
+    return isIos && isSafari;
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+
+  if (!isStandaloneMode() && !wasInstallDismissedRecently()) {
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      pwaPopupDesc.textContent = "홈 화면에 추가하면 앱처럼 바로 실행할 수 있습니다.";
+      pwaIosGuide.hidden = true;
+      pwaInstallBtn.textContent = "설치";
+      pwaInstallBanner.hidden = false;
+    });
+
+    if (isIosSafari()) {
+      setTimeout(() => {
+        if (!isStandaloneMode() && !wasInstallDismissedRecently()) {
+          pwaPopupDesc.textContent = "아이폰 홈 화면에 앱처럼 추가할 수 있습니다.";
+          pwaInstallBtn.textContent = "설치 방법";
+          pwaInstallBanner.hidden = false;
+        }
+      }, 1500);
+    }
+  }
+
+  pwaLaterBtn.addEventListener("click", dismissInstallPopup);
+
+  pwaInstallBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice.catch(() => {});
+      deferredInstallPrompt = null;
+      pwaInstallBanner.hidden = true;
+      return;
+    }
+
+    if (isIosSafari()) {
+      pwaIosGuide.hidden = !pwaIosGuide.hidden;
+    }
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    pwaInstallBanner.hidden = true;
+  });
 
   function escapeHtml(text) {
     return text
@@ -322,6 +488,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setAuthenticatedState(false);
+          showAuthError(data.error || "세션이 만료되었습니다. 비밀번호를 다시 입력해 주세요.");
+          return;
+        }
         showError(data.error || "초안 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }

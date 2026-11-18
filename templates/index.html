@@ -4,24 +4,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>수원대학교 행정 문서 초안 생성기</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/suwon-logo.png') }}">
+  <meta name="theme-color" content="#060913">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="수원대 문서AI">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon-192.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
   <div class="container">
     <header class="header">
-      <div class="header-brand">
-        <div class="logo-badge">
-          <img src="{{ url_for('static', filename='images/suwon-logo.png') }}" alt="수원대학교 로고" class="brand-logo">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="logo-badge">
+            <img src="{{ url_for('static', filename='images/suwon-logo.png') }}" alt="수원대학교 로고" class="brand-logo">
+          </div>
+          <div class="header-text">
+            <h1>수원대학교 행정 문서 초안 생성기</h1>
+            <p class="subtitle">문서 종류와 핵심 사실만 입력하면 Gemini가 업무 문서 초안을 작성해 줍니다.</p>
+          </div>
         </div>
-        <div class="header-text">
-          <h1>수원대학교 행정 문서 초안 생성기</h1>
-          <p class="subtitle">문서 종류와 핵심 사실만 입력하면 Gemini가 업무 문서 초안을 작성해 줍니다.</p>
-        </div>
+        <button type="button" id="logoutBtn" class="btn-secondary" {% if not is_authenticated %}hidden{% endif %}>로그아웃</button>
       </div>
     </header>
 
-    <main class="main-grid">
+    <section id="authGate" class="auth-gate" {% if is_authenticated %}hidden{% endif %}>
+      <div class="card auth-card">
+        <h2>접근 비밀번호 확인</h2>
+        <p class="auth-desc">이 웹앱을 사용하려면 관리자가 설정한 8자리 이상의 비밀번호를 입력해 주세요.</p>
+        <form id="authForm" novalidate>
+          <div class="form-group">
+            <label for="appPasswordInput">비밀번호 (8자리 이상)</label>
+            <input type="password" id="appPasswordInput" name="password" minlength="8" autocomplete="current-password" placeholder="비밀번호 8자리 이상 입력" required>
+          </div>
+          <div id="authError" class="alert-error" role="alert" hidden></div>
+          <button type="submit" id="authSubmitBtn" class="btn-primary">잠금 해제</button>
+        </form>
+      </div>
+    </section>
+
+    <main id="appContent" class="main-grid" {% if not is_authenticated %}hidden{% endif %}>
       <!-- 왼쪽: 입력 영역 -->
       <section class="card">
         <div class="card-header">
@@ -153,6 +177,21 @@
       </section>
     </main>
   </div>
+
+  <aside id="pwaInstallBanner" class="pwa-popup" role="dialog" aria-live="polite" aria-label="앱 설치 안내" hidden>
+    <div class="pwa-popup-content">
+      <img src="{{ url_for('static', filename='images/icon-192.png') }}" alt="앱 아이콘" class="pwa-popup-icon">
+      <div class="pwa-popup-text">
+        <strong>수원대 문서AI 앱 설치</strong>
+        <p id="pwaPopupDesc">홈 화면에 추가하면 앱처럼 바로 실행할 수 있습니다.</p>
+      </div>
+    </div>
+    <p id="pwaIosGuide" class="pwa-ios-guide" hidden>Safari 하단 <strong>공유 버튼(□↑)</strong> → <strong>'홈 화면에 추가'</strong>를 눌러주세요.</p>
+    <div class="pwa-popup-actions">
+      <button type="button" id="pwaLaterBtn" class="btn-secondary">나중에</button>
+      <button type="button" id="pwaInstallBtn" class="btn-primary pwa-install-btn">설치</button>
+    </div>
+  </aside>
 
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
